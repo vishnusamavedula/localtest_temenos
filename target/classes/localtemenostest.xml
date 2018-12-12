@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:objectstore="http://www.mulesoft.org/schema/mule/objectstore" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/objectstore http://www.mulesoft.org/schema/mule/objectstore/current/mule-objectstore.xsd">
+    <http:request-config name="HTTP_Request_Configuration" host="apidev-american-rml-vsamavedula.us-e2.cloudhub.io" port="80" basePath="/api" doc:name="HTTP Request Configuration"/>
+    <flow name="control_flow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/test" doc:name="HTTP"/>
+        <set-variable variableName="value" value="3" doc:name="value"/>
+        <set-variable variableName="output" value="#[[]]" doc:name="output"/>
+        <flow-ref name="while" doc:name="call loop"/>
+    </flow>
+    <flow name="while">
+        <http:request config-ref="HTTP_Request_Configuration" path="/flights/{id}" method="GET" doc:name="HTTP">
+            <http:request-builder>
+                <http:uri-param paramName="id" value="#[flowVars.value]"/>
+            </http:request-builder>
+        </http:request>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload]]></dw:set-payload>
+        </dw:transform-message>
+        <expression-component doc:name="Expression"><![CDATA[flowVars.output.add(payload)]]></expression-component>
+        <choice doc:name="check_for_other_IDs">
+            <when expression="#[flowVars.value &gt; 1]">
+                <set-variable variableName="value" value="#[flowVars.value - 1]" doc:name="decrementor"/>
+                <flow-ref name="while" doc:name="Flow Reference"/>
+            </when>
+            <otherwise>
+                <logger level="INFO" doc:name="break the loop"/>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+flowVars.output]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+        <set-variable variableName="final" value="#[flowVars.output]" doc:name="Variable"/>
+        <logger message="&quot;The flow Variable is:  &quot;  #[flowVars.output]" level="INFO" doc:name="Logger"/>
+    </flow>
+    <flow name="addtoObjectStore">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/addcache" allowedMethods="GET" doc:name="HTTP"/>
+        <set-variable variableName="account" value="100036" doc:name="account"/>
+        <objectstore:store config-ref="ObjectStore__Connector" key="account" value-ref="#[flowVars.account]" doc:name="Account_to_ObjectStore"/>
+        <logger message="account added to cache" level="INFO" doc:name="Logger"/>
+    </flow>
+    <flow name="retrievefromObjectStore">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/getaccount" allowedMethods="GET" doc:name="HTTP"/>
+        <objectstore:retrieve config-ref="ObjectStore__Connector" key="account" doc:name="ObjectStore"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload]]></dw:set-payload>
+        </dw:transform-message>
+        <logger level="INFO" doc:name="Logger"/>
+    </flow>
+    <flow name="mrTransformer">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/transform" doc:name="HTTP"/>
+        <set-variable variableName="testString" value="79197*Rolf Gerling,80802*Rolf Gerling,84972*Rolf Gerling" doc:name="TestString"/>
+        <dw:transform-message doc:name="SeparateAccount" metadata:id="cbf3429a-813d-4614-8c27-fafe32120c29">
+            <dw:input-variable doc:sample="sample_data/Object_2.dwl" mimeType="application/java" variableName="testString"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+//flowVars.testString splitBy ",",
+flowVars.testString replace "*Rolf Gerling" with ""]]></dw:set-payload>
+            <dw:set-variable variableName="t1"><![CDATA[%dw 1.0
+%output application/json
+---
+flowVars.testString splitBy "*Rolf Gerling,"]]></dw:set-variable>
+        </dw:transform-message>
+        <dw:transform-message doc:name="Convert to Array">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload splitBy ","]]></dw:set-payload>
+        </dw:transform-message>
+    </flow>
+</mule>

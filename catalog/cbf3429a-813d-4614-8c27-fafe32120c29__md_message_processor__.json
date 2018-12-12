@@ -1,0 +1,13 @@
+{
+    "inputMessageMetadata": {
+        "flowVariables": {
+            "testString": {
+                "connectorName": "ObjectStore__Connector",
+                "typeId": "java.lang.Object"
+            }
+        }
+    },
+    "outputMessageMetadata": {},
+    "id": "cbf3429a-813d-4614-8c27-fafe32120c29",
+    "version": "5.2.0.0"
+}
